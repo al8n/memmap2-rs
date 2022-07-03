@@ -108,3 +108,34 @@ jobs:
 
     - name: Run tests
       run: cargo test --all-features
+  
+  tarpaulin:
+    name: cargo tarpaulin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v1
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - uses: actions-rs/tarpaulin@v0.1
+      - name: Run cargo tarpaulin
+        run: cargo tarpaulin --features sync,tokio-async,std-async,smol-async --workspace --run-types Tests,Doctests --out Xml
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v1.0.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: file
