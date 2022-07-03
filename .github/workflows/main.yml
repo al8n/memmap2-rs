@@ -102,7 +102,7 @@ jobs:
     - name: Install toolchain
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: 1.36.0
+        toolchain: 1.56.0
         profile: minimal
         override: true
 
@@ -132,7 +132,7 @@ jobs:
 
       - uses: actions-rs/tarpaulin@v0.1
       - name: Run cargo tarpaulin
-        run: cargo tarpaulin --features sync,tokio-async,std-async,smol-async --workspace --run-types Tests,Doctests --out Xml
+        run: cargo tarpaulin --all-features --workspace --run-types Tests,Doctests --out Xml
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1.0.2

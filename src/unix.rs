@@ -224,7 +224,8 @@ impl MmapInner {
             let ptr = self.ptr.offset(-(alignment as isize));
             let len = self.len + alignment;
             let len = len.max(1);
-            rustix::mm::mprotect(ptr, len, prot).map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
+            rustix::mm::mprotect(ptr, len, prot)
+                .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
         }
     }
 
