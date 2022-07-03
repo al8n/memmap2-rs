@@ -1,10 +1,10 @@
-extern crate memmap2;
+extern crate memmapix;
 
 use std::env;
 use std::fs::File;
 use std::io::{self, Write};
 
-use memmap2::Mmap;
+use memmapix::Mmap;
 
 /// Output a file's contents to stdout. The file path must be provided as the first process
 /// argument.

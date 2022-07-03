@@ -1,4 +1,4 @@
-//! A cross-platform Rust API for memory mapped buffers.
+//! A pure Rust cross-platform Rust API for memory mapped buffers.
 //!
 //! The core functionality is provided by either [`Mmap`] or [`MmapMut`],
 //! which correspond to mapping a [`File`] to a [`&[u8]`](https://doc.rust-lang.org/std/primitive.slice.html)
@@ -17,7 +17,7 @@
 //! use std::fs::File;
 //! use std::io::Read;
 //!
-//! use memmap2::Mmap;
+//! use memmapix::Mmap;
 //!
 //! # fn main() -> std::io::Result<()> {
 //! let mut file = File::open("LICENSE-APACHE")?;
@@ -41,11 +41,6 @@
 #[cfg_attr(not(any(unix, windows)), path = "stub.rs")]
 mod os;
 use crate::os::{file_len, MmapInner};
-
-#[cfg(unix)]
-mod advice;
-#[cfg(unix)]
-pub use crate::advice::Advice;
 
 use std::fmt;
 #[cfg(not(any(unix, windows)))]
@@ -147,7 +142,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap2::{MmapMut, MmapOptions};
+    /// use memmapix::{MmapMut, MmapOptions};
     /// # use std::io::Result;
     ///
     /// # fn main() -> Result<()> {
@@ -177,7 +172,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap2::MmapOptions;
+    /// use memmapix::MmapOptions;
     /// use std::fs::File;
     ///
     /// # fn main() -> std::io::Result<()> {
@@ -205,16 +200,16 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap2::MmapOptions;
+    /// use memmapix::MmapOptions;
     /// use std::fs::File;
     ///
     /// # fn main() -> std::io::Result<()> {
     /// let mmap = unsafe {
     ///     MmapOptions::new()
-    ///                 .len(9)
+    ///                 .len(20)
     ///                 .map(&File::open("README.md")?)?
     /// };
-    /// assert_eq!(&b"# memmap2"[..], &mmap[..]);
+    /// assert_eq!(&b"<div align=\"center\">"[..], &mmap[..]);
     /// # Ok(())
     /// # }
     /// ```
@@ -261,7 +256,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap2::MmapOptions;
+    /// use memmapix::MmapOptions;
     ///
     /// # fn main() -> std::io::Result<()> {
     /// let stack = MmapOptions::new().stack().len(4096).map_anon();
@@ -282,7 +277,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap2::MmapOptions;
+    /// use memmapix::MmapOptions;
     /// use std::fs::File;
     ///
     /// # fn main() -> std::io::Result<()> {
@@ -311,7 +306,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap2::MmapOptions;
+    /// use memmapix::MmapOptions;
     /// use std::fs::File;
     /// use std::io::Read;
     ///
@@ -359,13 +354,13 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap2;
+    /// # extern crate memmapix;
     /// # extern crate tempfile;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::path::PathBuf;
     ///
-    /// use memmap2::MmapOptions;
+    /// use memmapix::MmapOptions;
     /// #
     /// # fn main() -> std::io::Result<()> {
     /// # let tempdir = tempfile::tempdir()?;
@@ -402,7 +397,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap2::MmapOptions;
+    /// use memmapix::MmapOptions;
     /// use std::fs::File;
     /// use std::io::Write;
     ///
@@ -430,7 +425,7 @@ impl MmapOptions {
     /// # Example
     ///
     /// ```
-    /// use memmap2::MmapOptions;
+    /// use memmapix::MmapOptions;
     /// use std::fs::File;
     /// use std::io::Read;
     ///
@@ -509,14 +504,14 @@ impl MmapOptions {
 /// ## Example
 ///
 /// ```
-/// use memmap2::MmapOptions;
+/// use memmapix::MmapOptions;
 /// use std::io::Write;
 /// use std::fs::File;
 ///
 /// # fn main() -> std::io::Result<()> {
 /// let file = File::open("README.md")?;
 /// let mmap = unsafe { MmapOptions::new().map(&file)? };
-/// assert_eq!(b"# memmap2", &mmap[0..9]);
+/// assert_eq!(b"<div align=\"center\">", &mmap[0..20]);
 /// # Ok(())
 /// # }
 /// ```
@@ -544,7 +539,7 @@ impl Mmap {
     /// use std::fs::File;
     /// use std::io::Read;
     ///
-    /// use memmap2::Mmap;
+    /// use memmapix::Mmap;
     ///
     /// # fn main() -> std::io::Result<()> {
     /// let mut file = File::open("LICENSE-APACHE")?;
@@ -574,10 +569,10 @@ impl Mmap {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap2;
+    /// # extern crate memmapix;
     /// # extern crate tempfile;
     /// #
-    /// use memmap2::Mmap;
+    /// use memmapix::Mmap;
     /// use std::ops::DerefMut;
     /// use std::io::Write;
     /// # use std::fs::OpenOptions;
@@ -608,7 +603,7 @@ impl Mmap {
     ///
     /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
     #[cfg(unix)]
-    pub fn advise(&self, advice: Advice) -> Result<()> {
+    pub fn advise(&self, advice: rustix::mm::Advice) -> Result<()> {
         self.inner.advise(advice)
     }
 }
@@ -692,6 +687,12 @@ impl MmapRaw {
         self.inner.len()
     }
 
+    /// Returns if the memory map is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.inner.len() == 0
+    }
+
     /// Flushes outstanding memory map modifications to disk.
     ///
     /// When this method returns with a non-error result, all outstanding changes to a file-backed
@@ -701,7 +702,7 @@ impl MmapRaw {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap2;
+    /// # extern crate memmapix;
     /// # extern crate tempfile;
     /// #
     /// use std::fs::OpenOptions;
@@ -709,7 +710,7 @@ impl MmapRaw {
     /// use std::path::PathBuf;
     /// use std::slice;
     ///
-    /// use memmap2::MmapRaw;
+    /// use memmapix::MmapRaw;
     ///
     /// # fn main() -> std::io::Result<()> {
     /// let tempdir = tempfile::tempdir()?;
@@ -821,13 +822,13 @@ impl MmapMut {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap2;
+    /// # extern crate memmapix;
     /// # extern crate tempfile;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::path::PathBuf;
     ///
-    /// use memmap2::MmapMut;
+    /// use memmapix::MmapMut;
     /// #
     /// # fn main() -> std::io::Result<()> {
     /// # let tempdir = tempfile::tempdir()?;
@@ -870,14 +871,14 @@ impl MmapMut {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap2;
+    /// # extern crate memmapix;
     /// # extern crate tempfile;
     /// #
     /// use std::fs::OpenOptions;
     /// use std::io::Write;
     /// use std::path::PathBuf;
     ///
-    /// use memmap2::MmapMut;
+    /// use memmapix::MmapMut;
     ///
     /// # fn main() -> std::io::Result<()> {
     /// # let tempdir = tempfile::tempdir()?;
@@ -946,12 +947,12 @@ impl MmapMut {
     /// # Example
     ///
     /// ```
-    /// # extern crate memmap2;
+    /// # extern crate memmapix;
     /// #
     /// use std::io::Write;
     /// use std::path::PathBuf;
     ///
-    /// use memmap2::{Mmap, MmapMut};
+    /// use memmapix::{Mmap, MmapMut};
     ///
     /// # fn main() -> std::io::Result<()> {
     /// let mut mmap = MmapMut::map_anon(128)?;
@@ -984,7 +985,7 @@ impl MmapMut {
     ///
     /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
     #[cfg(unix)]
-    pub fn advise(&self, advice: Advice) -> Result<()> {
+    pub fn advise(&self, advice: rustix::mm::Advice) -> Result<()> {
         self.inner.advise(advice)
     }
 }
@@ -1036,7 +1037,7 @@ mod test {
     extern crate tempfile;
 
     #[cfg(unix)]
-    use crate::advice::Advice;
+    use rustix::mm::Advice;
     use std::fs::OpenOptions;
     use std::io::{Read, Write};
     #[cfg(unix)]

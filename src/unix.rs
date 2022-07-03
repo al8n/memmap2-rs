@@ -1,34 +1,55 @@
-extern crate libc;
-
-use std::mem::MaybeUninit;
 use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{io, ptr};
 
-use crate::advice::Advice;
-
-#[cfg(any(
-    all(target_os = "linux", not(target_arch = "mips")),
-    target_os = "freebsd",
-    target_os = "android"
-))]
-const MAP_STACK: libc::c_int = libc::MAP_STACK;
+const MAP_ZERO: rustix::mm::MapFlags = unsafe { rustix::mm::MapFlags::from_bits_unchecked(0) };
 
 #[cfg(not(any(
-    all(target_os = "linux", not(target_arch = "mips")),
-    target_os = "freebsd",
-    target_os = "android"
+    target_os = "dragonfly",
+    target_os = "illumos",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "netbsd",
+    target_os = "redox",
 )))]
-const MAP_STACK: libc::c_int = 0;
+const MAP_STACK: rustix::mm::MapFlags = rustix::mm::MapFlags::STACK;
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-const MAP_POPULATE: libc::c_int = libc::MAP_POPULATE;
+#[cfg(any(
+    target_os = "dragonfly",
+    target_os = "illumos",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "netbsd",
+    target_os = "redox",
+))]
+const MAP_STACK: rustix::mm::MapFlags = MAP_ZERO;
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
-const MAP_POPULATE: libc::c_int = 0;
+#[cfg(not(any(
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "illumos",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "redox",
+)))]
+const MAP_POPULATE: rustix::mm::MapFlags = rustix::mm::MapFlags::POPULATE;
+
+#[cfg(any(
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "illumos",
+    target_os = "ios",
+    target_os = "macos",
+    target_os = "netbsd",
+    target_os = "openbsd",
+    target_os = "redox",
+))]
+const MAP_POPULATE: rustix::mm::MapFlags = MAP_ZERO;
 
 pub struct MmapInner {
-    ptr: *mut libc::c_void,
+    ptr: *mut core::ffi::c_void,
     len: usize,
 }
 
@@ -38,11 +59,11 @@ impl MmapInner {
     /// This is a thin wrapper around the `mmap` sytem call.
     fn new(
         len: usize,
-        prot: libc::c_int,
-        flags: libc::c_int,
+        prot: rustix::mm::ProtFlags,
+        flags: rustix::mm::MapFlags,
         file: RawFd,
         offset: u64,
-    ) -> io::Result<MmapInner> {
+    ) -> io::Result<Self> {
         let alignment = offset % page_size() as u64;
         let aligned_offset = offset - alignment;
         let aligned_len = len + alignment as usize;
@@ -79,66 +100,82 @@ impl MmapInner {
         // (SIGBUS is still possible by mapping a non-empty file and then truncating it
         // to a shorter size, but that is unrelated to this handling of empty files.)
 
-        unsafe {
-            let ptr = libc::mmap(
+        let ptr = unsafe {
+            rustix::mm::mmap(
                 ptr::null_mut(),
-                aligned_len as libc::size_t,
+                aligned_len,
                 prot,
                 flags,
-                file,
-                aligned_offset as libc::off_t,
-            );
+                rustix::fd::BorrowedFd::borrow_raw(file),
+                aligned_offset,
+            )
+        };
 
-            if ptr == libc::MAP_FAILED {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(MmapInner {
-                    ptr: ptr.offset(alignment as isize),
-                    len,
-                })
-            }
+        match ptr {
+            Ok(ptr) => Ok(MmapInner {
+                ptr: unsafe { ptr.offset(alignment as isize) },
+                len,
+            }),
+            Err(e) => Err(io::Error::from_raw_os_error(e.raw_os_error())),
+        }
+    }
+
+    fn new_anon(len: usize, stack: bool) -> io::Result<Self> {
+        let stack = if stack { MAP_STACK } else { MAP_ZERO };
+        let ptr = unsafe {
+            rustix::mm::mmap_anonymous(
+                ptr::null_mut(),
+                len.max(1),
+                rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+                rustix::mm::MapFlags::PRIVATE | stack,
+            )
+        };
+
+        match ptr {
+            Ok(ptr) => Ok(MmapInner { ptr, len }),
+            Err(e) => Err(io::Error::from_raw_os_error(e.raw_os_error())),
         }
     }
 
     pub fn map(len: usize, file: RawFd, offset: u64, populate: bool) -> io::Result<MmapInner> {
-        let populate = if populate { MAP_POPULATE } else { 0 };
+        let populate = if populate { MAP_POPULATE } else { MAP_ZERO };
         MmapInner::new(
             len,
-            libc::PROT_READ,
-            libc::MAP_SHARED | populate,
+            rustix::mm::ProtFlags::READ,
+            rustix::mm::MapFlags::SHARED | populate,
             file,
             offset,
         )
     }
 
     pub fn map_exec(len: usize, file: RawFd, offset: u64, populate: bool) -> io::Result<MmapInner> {
-        let populate = if populate { MAP_POPULATE } else { 0 };
+        let populate = if populate { MAP_POPULATE } else { MAP_ZERO };
         MmapInner::new(
             len,
-            libc::PROT_READ | libc::PROT_EXEC,
-            libc::MAP_SHARED | populate,
+            rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::EXEC,
+            rustix::mm::MapFlags::SHARED | populate,
             file,
             offset,
         )
     }
 
     pub fn map_mut(len: usize, file: RawFd, offset: u64, populate: bool) -> io::Result<MmapInner> {
-        let populate = if populate { MAP_POPULATE } else { 0 };
+        let populate = if populate { MAP_POPULATE } else { MAP_ZERO };
         MmapInner::new(
             len,
-            libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_SHARED | populate,
+            rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+            rustix::mm::MapFlags::SHARED | populate,
             file,
             offset,
         )
     }
 
     pub fn map_copy(len: usize, file: RawFd, offset: u64, populate: bool) -> io::Result<MmapInner> {
-        let populate = if populate { MAP_POPULATE } else { 0 };
+        let populate = if populate { MAP_POPULATE } else { MAP_ZERO };
         MmapInner::new(
             len,
-            libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_PRIVATE | populate,
+            rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+            rustix::mm::MapFlags::PRIVATE | populate,
             file,
             offset,
         )
@@ -150,11 +187,11 @@ impl MmapInner {
         offset: u64,
         populate: bool,
     ) -> io::Result<MmapInner> {
-        let populate = if populate { MAP_POPULATE } else { 0 };
+        let populate = if populate { MAP_POPULATE } else { MAP_ZERO };
         MmapInner::new(
             len,
-            libc::PROT_READ,
-            libc::MAP_PRIVATE | populate,
+            rustix::mm::ProtFlags::READ,
+            rustix::mm::MapFlags::PRIVATE | populate,
             file,
             offset,
         )
@@ -162,66 +199,45 @@ impl MmapInner {
 
     /// Open an anonymous memory map.
     pub fn map_anon(len: usize, stack: bool) -> io::Result<MmapInner> {
-        let stack = if stack { MAP_STACK } else { 0 };
-        MmapInner::new(
-            len,
-            libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_PRIVATE | libc::MAP_ANON | stack,
-            -1,
-            0,
-        )
+        MmapInner::new_anon(len, stack)
     }
 
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();
         let offset = offset as isize - alignment as isize;
         let len = len + alignment;
-        let result =
-            unsafe { libc::msync(self.ptr.offset(offset), len as libc::size_t, libc::MS_SYNC) };
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        unsafe { rustix::mm::msync(self.ptr.offset(offset), len, rustix::mm::MsyncFlags::SYNC) }
+            .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
     }
 
     pub fn flush_async(&self, offset: usize, len: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();
         let offset = offset as isize - alignment as isize;
         let len = len + alignment;
-        let result =
-            unsafe { libc::msync(self.ptr.offset(offset), len as libc::size_t, libc::MS_ASYNC) };
-        if result == 0 {
-            Ok(())
-        } else {
-            Err(io::Error::last_os_error())
-        }
+        unsafe { rustix::mm::msync(self.ptr.offset(offset), len, rustix::mm::MsyncFlags::ASYNC) }
+            .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
     }
 
-    fn mprotect(&mut self, prot: libc::c_int) -> io::Result<()> {
+    fn mprotect(&mut self, prot: rustix::mm::MprotectFlags) -> io::Result<()> {
         unsafe {
             let alignment = self.ptr as usize % page_size();
             let ptr = self.ptr.offset(-(alignment as isize));
             let len = self.len + alignment;
             let len = len.max(1);
-            if libc::mprotect(ptr, len, prot) == 0 {
-                Ok(())
-            } else {
-                Err(io::Error::last_os_error())
-            }
+            rustix::mm::mprotect(ptr, len, prot).map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
         }
     }
 
     pub fn make_read_only(&mut self) -> io::Result<()> {
-        self.mprotect(libc::PROT_READ)
+        self.mprotect(rustix::mm::MprotectFlags::READ)
     }
 
     pub fn make_exec(&mut self) -> io::Result<()> {
-        self.mprotect(libc::PROT_READ | libc::PROT_EXEC)
+        self.mprotect(rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::EXEC)
     }
 
     pub fn make_mut(&mut self) -> io::Result<()> {
-        self.mprotect(libc::PROT_READ | libc::PROT_WRITE)
+        self.mprotect(rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE)
     }
 
     #[inline]
@@ -239,14 +255,9 @@ impl MmapInner {
         self.len
     }
 
-    pub fn advise(&self, advice: Advice) -> io::Result<()> {
-        unsafe {
-            if libc::madvise(self.ptr, self.len, advice as i32) != 0 {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(())
-            }
-        }
+    pub fn advise(&self, advice: rustix::mm::Advice) -> io::Result<()> {
+        unsafe { rustix::mm::madvise(self.ptr, self.len, advice) }
+            .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
     }
 }
 
@@ -260,7 +271,7 @@ impl Drop for MmapInner {
         // in Drop impls, c.f. https://github.com/rust-lang/lang-team/issues/97
         unsafe {
             let ptr = self.ptr.offset(-(alignment as isize));
-            libc::munmap(ptr, len as libc::size_t);
+            let _ = rustix::mm::munmap(ptr, len);
         }
     }
 }
@@ -273,7 +284,7 @@ fn page_size() -> usize {
 
     match PAGE_SIZE.load(Ordering::Relaxed) {
         0 => {
-            let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize };
+            let page_size = rustix::param::page_size();
 
             PAGE_SIZE.store(page_size, Ordering::Relaxed);
 
@@ -284,19 +295,12 @@ fn page_size() -> usize {
 }
 
 pub fn file_len(file: RawFd) -> io::Result<u64> {
-    #[cfg(not(any(target_os = "linux", target_os = "emscripten", target_os = "l4re")))]
-    use libc::{fstat, stat};
-    #[cfg(any(target_os = "linux", target_os = "emscripten", target_os = "l4re"))]
-    use libc::{fstat64 as fstat, stat64 as stat};
+    use rustix::fs::fstat;
 
-    unsafe {
-        let mut stat = MaybeUninit::<stat>::uninit();
-
-        let result = fstat(file, stat.as_mut_ptr());
-        if result == 0 {
-            Ok(stat.assume_init().st_size as u64)
-        } else {
-            Err(io::Error::last_os_error())
-        }
+    let borrowed_fd: rustix::fd::BorrowedFd<'_> =
+        unsafe { rustix::fd::BorrowedFd::borrow_raw(file) };
+    match fstat(borrowed_fd) {
+        Ok(stat) => Ok(stat.st_size as u64),
+        Err(e) => Err(io::Error::from_raw_os_error(e.raw_os_error())),
     }
 }
