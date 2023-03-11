@@ -639,6 +639,40 @@ impl Mmap {
     pub fn advise_range(&self, advice: Advice, offset: usize, len: usize) -> Result<()> {
         self.inner.advise(advice, offset, len)
     }
+
+    /// Lock the memory map in `[offset..offset + data_size]` into RAM. Only supported on Unix.
+    ///
+    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
+    #[inline]
+    #[cfg(unix)]
+    pub fn mlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.mlock_segment(data_size, offset)
+    }
+
+    /// Unlock the memory map in `[offset..offset + data_size]`. Only supported on Unix.
+    ///
+    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
+    #[inline]
+    #[cfg(unix)]
+    pub fn munlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.munlock_segment(data_size, offset)
+    }
+
+    /// Lock the whole memory map into RAM. Only supported on Unix.
+    ///
+    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
+    #[cfg(unix)]
+    pub fn mlock(&self) -> Result<()> {
+        self.inner.mlock()
+    }
+
+    /// Unlock the whole memory map. Only supported on Unix.
+    ///
+    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
+    #[cfg(unix)]
+    pub fn munlock(&self) -> Result<()> {
+        self.inner.munlock()
+    }
 }
 
 #[cfg(feature = "stable_deref_trait")]
@@ -817,7 +851,12 @@ impl MmapRaw {
     ///
     /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
     #[cfg(unix)]
-    pub fn advise_range(&self, advice: rustix::mm::Advice, offset: usize, len: usize) -> Result<()> {
+    pub fn advise_range(
+        &self,
+        advice: rustix::mm::Advice,
+        offset: usize,
+        len: usize,
+    ) -> Result<()> {
         self.inner.advise(advice, offset, len)
     }
 
@@ -825,7 +864,7 @@ impl MmapRaw {
     ///
     /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
     #[cfg(unix)]
-    pub fn lock(&self) -> Result<()> {
+    pub fn mlock(&self) -> Result<()> {
         self.inner.mlock()
     }
 
@@ -833,7 +872,7 @@ impl MmapRaw {
     ///
     /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
     #[cfg(unix)]
-    pub fn unlock(&self) -> Result<()> {
+    pub fn munlock(&self) -> Result<()> {
         self.inner.munlock()
     }
 
@@ -1212,7 +1251,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
 
         file.set_len(expected_len as u64).unwrap();
@@ -1245,7 +1284,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
 
         file.set_len(expected_len as u64).unwrap();
@@ -1277,7 +1316,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
         let mmap = unsafe { Mmap::map(&file).unwrap() };
         assert!(mmap.is_empty());
@@ -1330,7 +1369,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
         file.set_len(128).unwrap();
 
@@ -1354,7 +1393,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
         file.set_len(128).unwrap();
         let write = b"abc123";
@@ -1380,7 +1419,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
         file.set_len(128).unwrap();
 
@@ -1416,7 +1455,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
         file.set_len(128).unwrap();
 
@@ -1441,7 +1480,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
 
         let offset = u32::max_value() as u64 + 2;
@@ -1548,7 +1587,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .expect("open");
         file.set_len(256_u64).expect("set_len");
 
@@ -1594,7 +1633,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .expect("open");
         file.set_len(256_u64).expect("set_len");
 
@@ -1648,7 +1687,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .expect("open");
         file.write_all(b"abc123").unwrap();
         let mmap = MmapOptions::new().map_raw(&file).unwrap();
@@ -1686,7 +1725,7 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
 
         file.set_len(expected_len as u64).unwrap();
@@ -1748,11 +1787,11 @@ mod test {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .unwrap();
         file.set_len(128).unwrap();
 
-        let mut mmap = unsafe { Mmap::map(&file).unwrap() };
+        let mmap = unsafe { Mmap::map(&file).unwrap() };
         #[cfg(target_os = "linux")]
         assert!(!is_locked());
 

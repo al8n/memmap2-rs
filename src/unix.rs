@@ -1,7 +1,4 @@
-
-use std::fs::File;
-use std::mem::ManuallyDrop;
-use std::os::unix::io::{FromRawFd, RawFd};
+use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{io, ptr};
 
@@ -123,14 +120,15 @@ impl MmapInner {
         }
     }
 
-    fn new_anon(len: usize, stack: bool) -> io::Result<Self> {
+    fn new_anon(len: usize, stack: bool, populate: bool) -> io::Result<Self> {
         let stack = if stack { MAP_STACK } else { MAP_ZERO };
+        let populate = if populate { MAP_POPULATE } else { MAP_ZERO };
         let ptr = unsafe {
             rustix::mm::mmap_anonymous(
                 ptr::null_mut(),
                 len.max(1),
                 rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
-                rustix::mm::MapFlags::PRIVATE | stack,
+                rustix::mm::MapFlags::PRIVATE | stack | populate,
             )
         };
 
@@ -143,18 +141,16 @@ impl MmapInner {
     #[inline]
     pub fn mlock(&self) -> io::Result<()> {
         unsafe {
-            rustix::mm::mlock(self.ptr, self.len).map_err(|e| {
-                io::Error::from_raw_os_error(e.raw_os_error())
-            })
+            rustix::mm::mlock(self.ptr, self.len)
+                .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
         }
     }
 
     #[inline]
     pub fn munlock(&self) -> io::Result<()> {
         unsafe {
-            rustix::mm::munlock(self.ptr, self.len).map_err(|e| {
-                io::Error::from_raw_os_error(e.raw_os_error())
-            })
+            rustix::mm::munlock(self.ptr, self.len)
+                .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
         }
     }
 
@@ -170,26 +166,6 @@ impl MmapInner {
 
     #[inline]
     pub fn munlock_segment(&self, data_size: usize, offset: usize) -> io::Result<()> {
-        let alignment = (self.ptr as usize + offset) % page_size();
-        let offset = offset as isize - alignment as isize;
-        let len = self.len.min(data_size) + alignment;
-
-        unsafe { rustix::mm::munlock(self.ptr.offset(offset), len) }
-            .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
-    }
-
-    #[inline]
-    pub fn mlock(&self, data_size: usize, offset: usize) -> io::Result<()> {
-        let alignment = (self.ptr as usize + offset) % page_size();
-        let offset = offset as isize - alignment as isize;
-        let len = self.len.min(data_size) + alignment;
-
-        unsafe { rustix::mm::mlock(self.ptr.offset(offset), len.min(data_size)) }
-            .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
-    }
-
-    #[inline]
-    pub fn munlock(&self, data_size: usize, offset: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();
         let offset = offset as isize - alignment as isize;
         let len = self.len.min(data_size) + alignment;
@@ -259,16 +235,9 @@ impl MmapInner {
     }
 
     /// Open an anonymous memory map.
+    #[inline]
     pub fn map_anon(len: usize, stack: bool, populate: bool) -> io::Result<MmapInner> {
-        let stack = if stack { MAP_STACK } else { 0 };
-        let populate = if populate { MAP_POPULATE } else { 0 };
-        MmapInner::new(
-            len,
-            libc::PROT_READ | libc::PROT_WRITE,
-            libc::MAP_PRIVATE | libc::MAP_ANON | stack | populate,
-            -1,
-            0,
-        )
+        MmapInner::new_anon(len, stack, populate)
     }
 
     pub fn flush(&self, offset: usize, len: usize) -> io::Result<()> {
@@ -330,9 +299,9 @@ impl MmapInner {
         let offset = offset as isize - alignment as isize;
         let len = len + alignment;
         unsafe {
-            match rustix::mm::madvise(self.ptr.offset(offset), len, advice as i32) {
+            match rustix::mm::madvise(self.ptr.offset(offset), len, advice) {
                 Ok(_) => Ok(()),
-                Err(e) => Err(io::Error::from_raw_os_error(e.raw_os_error())),   
+                Err(e) => Err(io::Error::from_raw_os_error(e.raw_os_error())),
             }
         }
     }
