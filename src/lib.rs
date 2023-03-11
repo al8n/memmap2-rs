@@ -864,12 +864,14 @@ impl MmapMut {
 
     /// Lock memory
     #[inline]
+    #[cfg(unix)]
     pub fn mlock(&self, data_size: usize, offset: usize) -> Result<()> {
         self.inner.mlock(data_size, offset)
     }
 
     /// Unlock memory
     #[inline]
+    #[cfg(unix)]
     pub fn munlock(&self, data_size: usize, offset: usize) -> Result<()> {
         self.inner.munlock(data_size, offset)
     }
