@@ -117,7 +117,7 @@ jobs:
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: nightly
           override: true
           components: rustfmt, clippy
       - uses: actions-rs/install@v0.1
