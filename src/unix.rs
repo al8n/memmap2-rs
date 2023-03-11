@@ -137,6 +137,26 @@ impl MmapInner {
         }
     }
 
+    #[inline]
+    pub fn mlock(&self, data_size: usize, offset: usize) -> io::Result<()> {
+        let alignment = (self.ptr as usize + offset) % page_size();
+        let offset = offset as isize - alignment as isize;
+        let len = self.len.min(data_size) + alignment;
+
+        unsafe { rustix::mm::mlock(self.ptr.offset(offset), len.min(data_size)) }
+            .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
+    }
+
+    #[inline]
+    pub fn munlock(&self, data_size: usize, offset: usize) -> io::Result<()> {
+        let alignment = (self.ptr as usize + offset) % page_size();
+        let offset = offset as isize - alignment as isize;
+        let len = self.len.min(data_size) + alignment;
+
+        unsafe { rustix::mm::munlock(self.ptr.offset(offset), len) }
+            .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
+    }
+
     pub fn map(len: usize, file: RawFd, offset: u64, populate: bool) -> io::Result<MmapInner> {
         let populate = if populate { MAP_POPULATE } else { MAP_ZERO };
         MmapInner::new(

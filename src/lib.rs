@@ -862,6 +862,18 @@ impl MmapMut {
         MmapOptions::new().len(length).map_anon()
     }
 
+    /// Lock memory
+    #[inline]
+    pub fn mlock(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.mlock(data_size, offset)
+    }
+
+    /// Unlock memory
+    #[inline]
+    pub fn munlock(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.munlock(data_size, offset)
+    }
+
     /// Flushes outstanding memory map modifications to disk.
     ///
     /// When this method returns with a non-error result, all outstanding changes to a file-backed
