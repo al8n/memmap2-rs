@@ -6,6 +6,41 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.10] - 2023-02-22
+### Added
+- `MmapOptions::map_anon` accounts for `populate` on Linux now.
+  [@jsgf](https://github.com/jsgf)
+
+## [0.5.9] - 2023-02-17
+### Added
+- `From<Mmap> for MmapRaw` and `From<MmapMut> for MmapRaw`.
+  [@swlynch99](https://github.com/swlynch99)
+- `Mmap::advise_range`, `MmapMut::advise_range`, `MmapRaw::advise_range`.
+  [@ho-229](https://github.com/ho-229)
+
+## [0.5.8] - 2022-11-09
+### Added
+- `MmapRaw::advise`, `MmapRaw::lock` and `MmapRaw::unlock`.
+  [@diwic](https://github.com/diwic)
+- Improve `MmapMut::make_exec` documentation.
+
+## [0.5.7] - 2022-08-15
+### Changed
+- Simplify file size retrieving code.
+  [@saethlin](https://github.com/saethlin)
+
+## [0.5.6] - 2022-08-11
+### Added
+- Memory locking and unlocking. See `Mmap::lock`, `Mmap::unlock`,
+  `MmapMut::lock` and `MmapMut::unlock`.
+  [@vmx](https://github.com/vmx)
+
+## [0.5.5] - 2022-07-09
+### Fixed
+- Limit mapping length to `isize::MAX` to prevent undefined behavior
+  on calling `std::slice::from_raw_parts`. Technically affects only 32-bit systems.
+  [@adamreichold](https://github.com/adamreichold)
+
 ## [0.5.4] - 2022-06-04
 ### Added
 - Add madvice operations specific to Darwin. [@turbocool3r](https://github.com/turbocool3r)
@@ -100,7 +135,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Removed
 - `winapi` dependency. [memmap-rs/pull/89](https://github.com/danburkert/memmap-rs/pull/89)
 
-[Unreleased]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.10...HEAD
+[0.5.10]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.9...v0.5.10
+[0.5.9]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.8...v0.5.9
+[0.5.8]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.7...v0.5.8
+[0.5.7]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.6...v0.5.7
+[0.5.6]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.5...v0.5.6
+[0.5.5]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/RazrFalcon/memmap2-rs/compare/v0.5.1...v0.5.2
