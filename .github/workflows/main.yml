@@ -20,7 +20,7 @@ jobs:
 
     - name: Run checks
       env:
-        CLIPPY_OPTS: --all-targets -- --allow clippy::len_without_is_empty --allow clippy::missing_safety_doc
+        CLIPPY_OPTS: --all-targets
       run: |
         cargo fmt --check
         cargo clippy $CLIPPY_OPTS
@@ -65,22 +65,26 @@ jobs:
       matrix:
         target:
           - i686-unknown-linux-gnu
+          - i686-unknown-linux-musl
           - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
     steps:
     - name: Checkout
       uses: actions/checkout@v3
 
     - name: Install toolchain
-      uses: dtolnay/rust-toolchain@master
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable-${{ matrix.target }}
+        target: ${{ matrix.target }}
 
     - name: Install multilib
-      if: ${{ matrix.target == 'i686-unknown-linux-gnu' }}
-      run: sudo apt install gcc-multilib
+      if: ${{ contains(matrix.target, 'i686-unknown-linux-') }}
+      run: |
+        sudo apt update -yqq
+        sudo apt install gcc-multilib
 
     - name: Run tests
-      run: cargo test --all-features
+      run: cargo test --all-features --target ${{ matrix.target }}
 
   check-stub:
     runs-on: ubuntu-latest
@@ -109,6 +113,7 @@ jobs:
         profile: minimal
         override: true
 
+<<<<<<< HEAD
     - name: Run tests
       run: cargo test --all-features
   
@@ -155,3 +160,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true 
+=======
+    # do not test, because dev-dependencies do not follow MSRV
+    - name: Build
+      run: cargo build --all-features
+>>>>>>> dev

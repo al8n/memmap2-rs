@@ -1,6 +1,6 @@
 [package]
 name = "memmapix"
-version = "0.7.3"
+version = "0.7.4"
 authors = ["Dan Burkert <dan@danburkert.com>", "Yevhenii Reizner <razrfalcon@gmail.com>", "Al Liu <scygliu1@gmail.com>"]
 license = "MIT/Apache-2.0"
 repository = "https://github.com/al8n/memmapix"
@@ -11,7 +11,7 @@ categories = ["filesystem", "external-ffi-bindings"]
 edition = "2018"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { version = "0.37", features = ["fs", "mm", "param"] }
+rustix = { version = "0.38", features = ["fs", "mm", "param"] }
 
 [dev-dependencies]
 tempfile = "3"
