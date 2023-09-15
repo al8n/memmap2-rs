@@ -37,12 +37,21 @@
 //! before you create it.
 
 #![allow(clippy::len_without_is_empty, clippy::missing_safety_doc)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, allow(unused_attributes))]
 
 #[cfg_attr(unix, path = "unix.rs")]
 #[cfg_attr(windows, path = "windows.rs")]
 #[cfg_attr(not(any(unix, windows)), path = "stub.rs")]
 mod os;
 use crate::os::{file_len, MmapInner};
+
+#[cfg(unix)]
+#[cfg_attr(docsrs, doc(cfg(unix)))]
+pub use crate::os::Advice;
+#[cfg(target_os = "linux")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
+pub use crate::os::MremapFlags;
 
 use std::fmt;
 #[cfg(not(any(unix, windows)))]
@@ -56,9 +65,6 @@ use std::os::unix::io::{AsRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawHandle, RawHandle};
 use std::slice;
-
-#[cfg(unix)]
-pub use rustix::mm::Advice;
 
 #[cfg(not(any(unix, windows)))]
 pub struct MmapRawDescriptor<'a>(&'a File);
@@ -529,7 +535,7 @@ impl MmapOptions {
 /// Dereferencing and accessing the bytes of the buffer may result in page faults (e.g. swapping
 /// the mapped pages into physical memory) though the details of this are platform specific.
 ///
-/// `Mmap` is [`Sync`](std::marker::Sync) and [`Send`](std::marker::Send).
+/// `Mmap` is `Sync` and `Send`.
 ///
 /// ## Safety
 ///
@@ -639,8 +645,9 @@ impl Mmap {
 
     /// Advise OS how this memory map will be accessed. Only supported on Unix.
     ///
-    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
+    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) man page.
     #[cfg(unix)]
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
     pub fn advise(&self, advice: rustix::mm::Advice) -> Result<()> {
         self.inner.advise(advice, 0, self.inner.len())
     }
@@ -651,50 +658,55 @@ impl Mmap {
     ///
     /// Only supported on Unix.
     ///
-    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
+    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) man page.
     #[cfg(unix)]
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
     pub fn advise_range(&self, advice: Advice, offset: usize, len: usize) -> Result<()> {
         self.inner.advise(advice, offset, len)
     }
 
     /// Lock the memory map in `[offset..offset + data_size]` into RAM. Only supported on Unix.
     ///
-    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
+    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) man page.
     #[inline]
     #[cfg(unix)]
-    pub fn mlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
-        self.inner.mlock_segment(data_size, offset)
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
+    pub fn lock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.lock_segment(data_size, offset)
     }
 
     /// Unlock the memory map in `[offset..offset + data_size]`. Only supported on Unix.
     ///
-    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
+    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) man page.
     #[inline]
     #[cfg(unix)]
-    pub fn munlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
-        self.inner.munlock_segment(data_size, offset)
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
+    pub fn unlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.unlock_segment(data_size, offset)
     }
 
     /// Lock the whole memory map into RAM. Only supported on Unix.
     ///
-    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
+    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) man page.
     #[cfg(unix)]
-    pub fn mlock(&self) -> Result<()> {
-        self.inner.mlock()
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
+    pub fn lock(&self) -> Result<()> {
+        self.inner.lock()
     }
 
     /// Unlock the whole memory map. Only supported on Unix.
     ///
-    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
+    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) man page.
     #[cfg(unix)]
-    pub fn munlock(&self) -> Result<()> {
-        self.inner.munlock()
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
+    pub fn unlock(&self) -> Result<()> {
+        self.inner.unlock()
     }
 
     /// Adjust the size of the memory mapping.
     ///
     /// This will try to resize the memory mapping in place. If
-    /// [`RemapOptions::may_move`] is specified it will move the mapping if it
+    /// [`MremapFlags::MAYMOVE`] is specified it will move the mapping if it
     /// could not resize in place, otherwise it will error.
     ///
     /// Only supported on Linux.
@@ -709,7 +721,8 @@ impl Mmap {
     ///
     /// [`mremap(2)`]: https://man7.org/linux/man-pages/man2/mremap.2.html
     #[cfg(target_os = "linux")]
-    pub unsafe fn remap(&mut self, new_len: usize, options: RemapOptions) -> Result<()> {
+    #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
+    pub unsafe fn remap(&mut self, new_len: usize, options: MremapFlags) -> Result<()> {
         self.inner.remap(new_len, options)
     }
 }
@@ -876,8 +889,9 @@ impl MmapRaw {
 
     /// Advise OS how this memory map will be accessed. Only supported on Unix.
     ///
-    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
+    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) man page.
     #[cfg(unix)]
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
     pub fn advise(&self, advice: Advice) -> Result<()> {
         self.inner.advise(advice, 0, self.inner.len())
     }
@@ -888,8 +902,9 @@ impl MmapRaw {
     ///
     /// Only supported on Unix.
     ///
-    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
+    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) man page.
     #[cfg(unix)]
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
     pub fn advise_range(
         &self,
         advice: rustix::mm::Advice,
@@ -901,42 +916,46 @@ impl MmapRaw {
 
     /// Lock the whole memory map into RAM. Only supported on Unix.
     ///
-    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
+    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) man page.
     #[cfg(unix)]
-    pub fn mlock(&self) -> Result<()> {
-        self.inner.mlock()
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
+    pub fn lock(&self) -> Result<()> {
+        self.inner.lock()
     }
 
     /// Unlock the whole memory map. Only supported on Unix.
     ///
-    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
+    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) man page.
     #[cfg(unix)]
-    pub fn munlock(&self) -> Result<()> {
-        self.inner.munlock()
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
+    pub fn unlock(&self) -> Result<()> {
+        self.inner.unlock()
     }
 
     /// Lock the memory map in `[offset..offset + data_size]` into RAM. Only supported on Unix.
     ///
-    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
+    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) man page.
     #[inline]
     #[cfg(unix)]
-    pub fn mlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
-        self.inner.mlock_segment(data_size, offset)
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
+    pub fn lock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.lock_segment(data_size, offset)
     }
 
     /// Unlock the memory map in `[offset..offset + data_size]`. Only supported on Unix.
     ///
-    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
+    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) man page.
     #[inline]
     #[cfg(unix)]
-    pub fn munlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
-        self.inner.munlock_segment(data_size, offset)
+    #[cfg_attr(docsrs, doc(cfg(unix)))]
+    pub fn unlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.unlock_segment(data_size, offset)
     }
 
     /// Adjust the size of the memory mapping.
     ///
     /// This will try to resize the memory mapping in place. If
-    /// [`RemapOptions::may_move`] is specified it will move the mapping if it
+    /// [`MremapFlags::MAYMOVE`] is specified it will move the mapping if it
     /// could not resize in place, otherwise it will error.
     ///
     /// Only supported on Linux.
@@ -951,7 +970,8 @@ impl MmapRaw {
     ///
     /// [`mremap(2)`]: https://man7.org/linux/man-pages/man2/mremap.2.html
     #[cfg(target_os = "linux")]
-    pub unsafe fn remap(&mut self, new_len: usize, options: RemapOptions) -> Result<()> {
+    #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
+    pub unsafe fn remap(&mut self, new_len: usize, options: MremapFlags) -> Result<()> {
         self.inner.remap(new_len, options)
     }
 }
@@ -993,7 +1013,7 @@ impl From<MmapMut> for MmapRaw {
 /// Dereferencing and accessing the bytes of the buffer may result in page faults (e.g. swapping
 /// the mapped pages into physical memory) though the details of this are platform specific.
 ///
-/// `Mmap` is [`Sync`](std::marker::Sync) and [`Send`](std::marker::Send).
+/// `Mmap` is `Sync` and `Send`
 ///
 /// See [`Mmap`] for the immutable version.
 ///
@@ -1064,36 +1084,36 @@ impl MmapMut {
 
     /// Lock the whole memory map into RAM. Only supported on Unix.
     ///
-    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
+    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) man page.
     #[cfg(unix)]
     pub fn lock(&self) -> Result<()> {
-        self.inner.mlock()
+        self.inner.lock()
     }
 
     /// Unlock the whole memory map. Only supported on Unix.
     ///
-    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
+    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) man page.
     #[cfg(unix)]
     pub fn unlock(&self) -> Result<()> {
-        self.inner.munlock()
+        self.inner.unlock()
     }
 
     /// Lock the memory map segment in `[offset..offset + data_size]` into RAM. Only supported on Unix.
     ///
-    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) map page.
+    /// See [mlock()](https://man7.org/linux/man-pages/man2/mlock.2.html) man page.
     #[inline]
     #[cfg(unix)]
-    pub fn mlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
-        self.inner.mlock_segment(data_size, offset)
+    pub fn lock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.lock_segment(data_size, offset)
     }
 
     /// Unlock the memory map segment in `[offset..offset + data_size]`. Only supported on Unix.
     ///
-    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) map page.
+    /// See [munlock()](https://man7.org/linux/man-pages/man2/munlock.2.html) man page.
     #[inline]
     #[cfg(unix)]
-    pub fn munlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
-        self.inner.munlock_segment(data_size, offset)
+    pub fn unlock_segment(&self, data_size: usize, offset: usize) -> Result<()> {
+        self.inner.unlock_segment(data_size, offset)
     }
 
     /// Flushes outstanding memory map modifications to disk.
@@ -1223,7 +1243,7 @@ impl MmapMut {
 
     /// Advise OS how this memory map will be accessed. Only supported on Unix.
     ///
-    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
+    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) man page.
     #[cfg(unix)]
     pub fn advise(&self, advice: Advice) -> Result<()> {
         self.inner.advise(advice, 0, self.inner.len())
@@ -1235,7 +1255,7 @@ impl MmapMut {
     ///
     /// Only supported on Unix.
     ///
-    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) map page.
+    /// See [madvise()](https://man7.org/linux/man-pages/man2/madvise.2.html) man page.
     #[cfg(unix)]
     pub fn advise_range(&self, advice: Advice, offset: usize, len: usize) -> Result<()> {
         self.inner.advise(advice, offset, len)
@@ -1244,7 +1264,7 @@ impl MmapMut {
     /// Adjust the size of the memory mapping.
     ///
     /// This will try to resize the memory mapping in place. If
-    /// [`RemapOptions::may_move`] is specified it will move the mapping if it
+    /// [`MremapFlags::MAYMOVE`] is specified it will move the mapping if it
     /// could not resize in place, otherwise it will error.
     ///
     /// Only supported on Linux.
@@ -1259,7 +1279,8 @@ impl MmapMut {
     ///
     /// [`mremap(2)`]: https://man7.org/linux/man-pages/man2/mremap.2.html
     #[cfg(target_os = "linux")]
-    pub unsafe fn remap(&mut self, new_len: usize, options: RemapOptions) -> Result<()> {
+    #[cfg_attr(docsrs, doc(cfg(target_os = "linux")))]
+    pub unsafe fn remap(&mut self, new_len: usize, options: MremapFlags) -> Result<()> {
         self.inner.remap(new_len, options)
     }
 }
@@ -1897,21 +1918,21 @@ mod test {
         #[cfg(target_os = "linux")]
         assert!(!is_locked());
 
-        mmap.mlock().expect("mmap lock should be supported on unix");
+        mmap.lock().expect("mmap lock should be supported on unix");
         #[cfg(target_os = "linux")]
         assert!(is_locked());
 
-        mmap.mlock()
+        mmap.lock()
             .expect("mmap lock again should not cause problems");
         #[cfg(target_os = "linux")]
         assert!(is_locked());
 
-        mmap.munlock()
+        mmap.unlock()
             .expect("mmap unlock should be supported on unix");
         #[cfg(target_os = "linux")]
         assert!(!is_locked());
 
-        mmap.munlock()
+        mmap.unlock()
             .expect("mmap unlock again should not cause problems");
         #[cfg(target_os = "linux")]
         assert!(!is_locked());
@@ -1920,7 +1941,7 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn remap_grow() {
-        use crate::RemapOptions;
+        use rustix::mm::MremapFlags;
 
         let initial_len = 128;
         let final_len = 2000;
@@ -1935,10 +1956,7 @@ mod test {
         assert_eq!(mmap.len(), initial_len);
         assert_eq!(&mmap[..], &zeros[..initial_len]);
 
-        unsafe {
-            mmap.remap(final_len, RemapOptions::new().may_move(true))
-                .unwrap()
-        };
+        unsafe { mmap.remap(final_len, MremapFlags::MAYMOVE).unwrap() };
 
         // The size should have been updated
         assert_eq!(mmap.len(), final_len);
@@ -1953,7 +1971,7 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn remap_shrink() {
-        use crate::RemapOptions;
+        use rustix::mm::MremapFlags;
 
         let initial_len = 20000;
         let final_len = 400;
@@ -1966,7 +1984,7 @@ mod test {
         let mut mmap = unsafe { MmapMut::map_mut(&file).unwrap() };
         assert_eq!(mmap.len(), initial_len);
 
-        unsafe { mmap.remap(final_len, RemapOptions::new()).unwrap() };
+        unsafe { mmap.remap(final_len, MremapFlags::empty()).unwrap() };
         assert_eq!(mmap.len(), final_len);
 
         // Check that the mmap is still writable along the slice length
@@ -1977,13 +1995,13 @@ mod test {
     #[cfg(target_os = "linux")]
     #[cfg(target_pointer_width = "32")]
     fn remap_len_overflow() {
-        use crate::RemapOptions;
+        use rustix::mm::MremapFlags;
 
         let file = tempfile::tempfile().unwrap();
         file.set_len(1024).unwrap();
         let mut mmap = unsafe { MmapOptions::new().len(1024).map(&file).unwrap() };
 
-        let res = unsafe { mmap.remap(0x80000000, RemapOptions::new().may_move(true)) };
+        let res = unsafe { mmap.remap(0x80000000, MremapFlags::MAYMOVE) };
         assert_eq!(
             res.unwrap_err().to_string(),
             "memory map length overflows isize"
@@ -1995,7 +2013,7 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn remap_with_offset() {
-        use crate::RemapOptions;
+        use rustix::mm::MremapFlags;
 
         let offset = 77;
         let initial_len = 128;
@@ -2017,10 +2035,7 @@ mod test {
         assert_eq!(mmap.len(), initial_len);
         assert_eq!(&mmap[..], &zeros[..initial_len]);
 
-        unsafe {
-            mmap.remap(final_len, RemapOptions::new().may_move(true))
-                .unwrap()
-        };
+        unsafe { mmap.remap(final_len, MremapFlags::MAYMOVE).unwrap() };
 
         // The size should have been updated
         assert_eq!(mmap.len(), final_len);

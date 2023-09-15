@@ -1,9 +1,9 @@
 [package]
 name = "memmapix"
-version = "0.7.4"
+version = "0.7.6"
 authors = ["Dan Burkert <dan@danburkert.com>", "Yevhenii Reizner <razrfalcon@gmail.com>", "Al Liu <scygliu1@gmail.com>"]
 license = "MIT/Apache-2.0"
-repository = "https://github.com/al8n/memmapix"
+repository = "https://github.com/al8n/memmapix-rs"
 documentation = "https://docs.rs/memmapix"
 description = "No libc, pure Rust cross-platform Rust API for memory-mapped file IO"
 keywords = ["mmap", "memory-map", "memmap2", "memmap", "file"]
@@ -16,3 +16,7 @@ rustix = { version = "0.38", features = ["fs", "mm", "param"] }
 [dev-dependencies]
 tempfile = "3"
 owning_ref = "0.4.1"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

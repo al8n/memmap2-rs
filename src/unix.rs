@@ -2,6 +2,11 @@ use std::os::unix::io::RawFd;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{io, ptr};
 
+pub use rustix::mm::Advice;
+
+#[cfg(target_os = "linux")]
+pub use rustix::mm::MremapFlags;
+
 const MAP_ZERO: rustix::mm::MapFlags = rustix::mm::MapFlags::empty();
 
 #[cfg(not(any(
@@ -228,7 +233,7 @@ impl MmapInner {
     }
 
     #[inline]
-    pub fn mlock(&self) -> io::Result<()> {
+    pub fn lock(&self) -> io::Result<()> {
         unsafe {
             rustix::mm::mlock(self.ptr, self.len)
                 .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
@@ -236,7 +241,7 @@ impl MmapInner {
     }
 
     #[inline]
-    pub fn munlock(&self) -> io::Result<()> {
+    pub fn unlock(&self) -> io::Result<()> {
         unsafe {
             rustix::mm::munlock(self.ptr, self.len)
                 .map_err(|e| io::Error::from_raw_os_error(e.raw_os_error()))
@@ -244,7 +249,7 @@ impl MmapInner {
     }
 
     #[inline]
-    pub fn mlock_segment(&self, data_size: usize, offset: usize) -> io::Result<()> {
+    pub fn lock_segment(&self, data_size: usize, offset: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();
         let offset = offset as isize - alignment as isize;
         let len = self.len.min(data_size) + alignment;
@@ -254,7 +259,7 @@ impl MmapInner {
     }
 
     #[inline]
-    pub fn munlock_segment(&self, data_size: usize, offset: usize) -> io::Result<()> {
+    pub fn unlock_segment(&self, data_size: usize, offset: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();
         let offset = offset as isize - alignment as isize;
         let len = self.len.min(data_size) + alignment;
@@ -383,7 +388,7 @@ impl MmapInner {
         self.len
     }
 
-    pub fn advise(&self, advice: rustix::mm::Advice, offset: usize, len: usize) -> io::Result<()> {
+    pub fn advise(&self, advice: Advice, offset: usize, len: usize) -> io::Result<()> {
         let alignment = (self.ptr as usize + offset) % page_size();
         let offset = offset as isize - alignment as isize;
         let len = len + alignment;
@@ -397,7 +402,7 @@ impl MmapInner {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn remap(&mut self, new_len: usize, options: rustix::mm::MremapFlags) -> io::Result<()> {
+    pub fn remap(&mut self, new_len: usize, options: MremapFlags) -> io::Result<()> {
         let (old_ptr, old_len, offset) = self.as_mmap_params();
         let (map_len, offset) = Self::adjust_mmap_params(new_len, offset)?;
 

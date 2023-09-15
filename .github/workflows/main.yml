@@ -4,6 +4,7 @@ on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
+  nightly: nightly
 
 jobs:
   check:
@@ -109,59 +110,70 @@ jobs:
     - name: Install toolchain
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: 1.56.0
+        toolchain: 1.72.0
         profile: minimal
         override: true
 
-<<<<<<< HEAD
     - name: Run tests
       run: cargo test --all-features
-  
-  tarpaulin:
-    name: cargo tarpaulin
-    runs-on: ubuntu-latest
+    # do not test, because dev-dependencies do not follow MSRV
+    - name: Build
+      run: cargo build --all-features
+  docs:
+    name: docs
+    runs-on: ubuntu-latest 
     steps:
       - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.nightly }}
+          override: true
+      - uses: Swatinem/rust-cache@v1
+      - name: "doc --lib --all-features"
+        run: cargo doc --lib --no-deps --all-features --document-private-items
+        env:
+          RUSTFLAGS: --cfg docsrs
+          RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+        
+  coverage:
+    name: cargo tarpaulin
+    runs-on: ubuntu-latest
+    needs: 
+      - check
+      - test-win
+      - test-linux
+      - test-macos
+      - check-stub
+      - test-msrv
+      - docs
+    steps:
+      - uses: actions/checkout@v3
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
-          components: rustfmt, clippy
       - uses: actions-rs/install@v0.1
         with:
           crate: cargo-tarpaulin
           version: latest
       - name: Cache ~/.cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/.cargo
           key: ${{ runner.os }}-coverage-dotcargo
       - name: Cache cargo build
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: target
           key: ${{ runner.os }}-coverage-cargo-build-target
-      - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-      - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
       - name: Run tarpaulin
         uses: actions-rs/cargo@v1
         with:
           command: tarpaulin
-          args: --run-types Tests,Doctests --workspace --out Xml
+          args: --run-types all-targets --workspace --out xml
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v1.0.2
+        uses: codecov/codecov-action@v3.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true 
-=======
-    # do not test, because dev-dependencies do not follow MSRV
-    - name: Build
-      run: cargo build --all-features
->>>>>>> dev
+          fail_ci_if_error: true
